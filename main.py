@@ -2,6 +2,7 @@ from fastapi import Body, FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import Json
 from docxtpl import DocxTemplate
+from typing import Dict
 import aiofiles
 from utils import remove_temporary_files, get_env
 import requests
@@ -48,7 +49,7 @@ async def process_document_template(data: Json = Body(...), file: UploadFile = F
     return FileResponse(pdf_file_path, media_type='application/pdf')
 
 @app.post('/api/v1/process-template-document/tata-kfs-review')
-async def process_document_template(data: Json = Body(...)):
+async def process_document_template(data: Dict[str, str] = Body(...)):
     if not data:
         return JSONResponse({'status': 'error', 'message': 'data is required'}, status_code=400)
 
