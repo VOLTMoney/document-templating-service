@@ -46,3 +46,32 @@ async def process_document_template(data: Json = Body(...), file: UploadFile = F
     async with aiofiles.open(pdf_file_path, 'wb') as out_file:
         await out_file.write(response.content)
     return FileResponse(pdf_file_path, media_type='application/pdf')
+
+@app.post('/api/v1/process-template-document/tata-kfs-review')
+async def process_document_template(data: Json = Body(...)):
+    if not data:
+        return JSONResponse({'status': 'error', 'message': 'data is required'}, status_code=400)
+
+    resourceURL = '{}/forms/libreoffice/convert'.format(get_env('GOTENBERG_API_URL'))
+    file_path = 'temp/Tata_KFS_Review_Template.docx'
+    modified_file_path = 'temp/modified_Tata_KFS_Review_Template.docx'
+    pdf_file_path = 'temp/Tata_KFS_Review_Template.pdf'
+
+    # Load and modify the document
+    document = DocxTemplate(file_path)
+    document.render(data)
+    document.save(modified_file_path)
+
+    # Convert to PDF
+    try:
+        with open(modified_file_path, 'rb') as f:
+            response = requests.post(url=resourceURL, files={'file': f})
+            response.raise_for_status()  # Check for errors in the response
+    except Exception as e:
+        return JSONResponse({'status': 'error', 'message': str(e)}, status_code=500)
+
+    # Save the PDF
+    async with aiofiles.open(pdf_file_path, 'wb') as out_file:
+        await out_file.write(response.content)
+
+    return FileResponse(pdf_file_path, media_type='application/pdf')
