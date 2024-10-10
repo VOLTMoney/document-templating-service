@@ -1,11 +1,19 @@
+import base64
 from fastapi import Body, FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import Json
 from docxtpl import DocxTemplate
-from typing import Dict
+from typing import Any, Dict
 import aiofiles
 from utils import remove_temporary_files, get_env
 import requests
+import uuid
+import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)  # Set to DEBUG for more detailed logs
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Document Template Processing Service",
@@ -48,19 +56,52 @@ async def process_document_template(data: Json = Body(...), file: UploadFile = F
         await out_file.write(response.content)
     return FileResponse(pdf_file_path, media_type='application/pdf')
 
-@app.post('/api/v1/process-template-document/tata-kfs-review')
-async def process_document_template(data: Dict[str, str] = Body(...)):
-    if not data:
-        return JSONResponse({'status': 'error', 'message': 'data is required'}, status_code=400)
+# Define a custom temporary folder to store uploaded files
+UPLOAD_FOLDER = 'temp/'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-    resourceURL = '{}/forms/libreoffice/convert'.format(get_env('GOTENBERG_API_URL'))
-    file_path = 'temp/Tata_KFS_Review_Template.docx'
-    modified_file_path = 'temp/modified_Tata_KFS_Review_Template.docx'
-    pdf_file_path = 'temp/Tata_KFS_Review_Template.pdf'
+# Only allow .docx files
+ALLOWED_EXTENSIONS = {'docx'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.post('/api/v1/process-template-document/upload-file')
+async def process_document_template(file: UploadFile = File(...)):
+    # Check if the uploaded file is a .docx file
+    if not allowed_file(file.filename):
+        return JSONResponse(content={"error": "Only .docx files are allowed"}, status_code=400)
+
+    # Save the uploaded file to the custom temporary folder
+    file_location = os.path.join(UPLOAD_FOLDER, file.filename)
+
+    with open(file_location, "wb") as buffer:
+        buffer.write(await file.read())
+
+    # Return success message with file path
+    return {"message": "File uploaded successfully", "file_path": file_location}
+
+
+
+@app.post('/api/v1/process-template-document/tata-kfs-review')
+async def process_document_template(data: Dict[str, Any] = Body(...)):
+    logger.info("Received request to process document template data {}".format(data))
+    if not data or 'fileName' not in data or 'data' not in data:
+        return JSONResponse({'status': 'error', 'message': 'fileName and data are required'}, status_code=400)
+
+    resourceURL = f"{get_env('GOTENBERG_API_URL')}/forms/libreoffice/convert"
+    file_name = data['fileName'].replace('.docx', '')  # Remove the extension for filename purposes
+    file_path = f'temp/{data["fileName"]}'
+
+    # Generate unique filenames
+    unique_id = str(uuid.uuid4())
+    modified_file_path = f'temp/modified_{file_name}_{unique_id}.docx'
+    pdf_file_path = f'temp/{file_name}_{unique_id}.pdf'
 
     # Load and modify the document
     document = DocxTemplate(file_path)
-    document.render(data)
+    document.render(data['data'])
     document.save(modified_file_path)
 
     # Convert to PDF
@@ -75,4 +116,9 @@ async def process_document_template(data: Dict[str, str] = Body(...)):
     async with aiofiles.open(pdf_file_path, 'wb') as out_file:
         await out_file.write(response.content)
 
-    return FileResponse(pdf_file_path, media_type='application/pdf')
+    # Read the PDF file and encode to Base64
+    async with aiofiles.open(pdf_file_path, 'rb') as out_file:
+        pdf_content = await out_file.read()
+        pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+
+    return JSONResponse({'status': 'success', 'pdf_base64': pdf_base64})
