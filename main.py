@@ -84,7 +84,7 @@ async def process_document_template(file: UploadFile = File(...)):
 
 
 
-@app.post('/api/v1/process-template-document/tata-kfs-review')
+@app.post('/api/v1/process-template-document/docx-to-pdf')
 async def process_document_template(data: Dict[str, Any] = Body(...)):
     logger.info("Received request to process document template data {}".format(data))
     if not data or 'fileName' not in data or 'data' not in data:
