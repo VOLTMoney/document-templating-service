@@ -104,7 +104,7 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
 
     resourceURL = f"{get_env('GOTENBERG_API_URL')}/forms/libreoffice/convert"
     file_name = data['fileName'].replace('.docx', '')  # Remove the extension for filename purposes
-    file_path = f'temp/{data["fileName"]}'
+    file_path = f'docx-template/{data["fileName"]}'
 
     # Generate unique filenames
     unique_id = str(uuid.uuid4())
