@@ -84,11 +84,24 @@ async def process_document_template(file: UploadFile = File(...)):
 
 
 
+import os
+import uuid
+from fastapi import Body
+from fastapi.responses import JSONResponse
+import requests
+import aiofiles
+from docxtpl import DocxTemplate
+import base64
+
 @app.post('/api/v1/process-template-document/docx-to-pdf')
 async def process_document_template(data: Dict[str, Any] = Body(...)):
     logger.info("Received request to process document template data {}".format(data))
     if not data or 'fileName' not in data or 'data' not in data:
         return JSONResponse({'status': 'error', 'message': 'fileName and data are required'}, status_code=400)
+
+    # Ensure the temp directory exists
+    if not os.path.exists('temp'):
+        os.makedirs('temp')
 
     resourceURL = f"{get_env('GOTENBERG_API_URL')}/forms/libreoffice/convert"
     file_name = data['fileName'].replace('.docx', '')  # Remove the extension for filename purposes
@@ -100,25 +113,41 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
     pdf_file_path = f'temp/{file_name}_{unique_id}.pdf'
 
     # Load and modify the document
-    document = DocxTemplate(file_path)
-    document.render(data['data'])
-    document.save(modified_file_path)
+    try:
+        document = DocxTemplate(file_path)
+        document.render(data['data'])
+        document.save(modified_file_path)
+        logger.info(f"Modified docx saved at: {modified_file_path}")
+    except Exception as e:
+        return JSONResponse({'status': 'error', 'message': f"Error rendering or saving docx: {str(e)}"}, status_code=500)
 
     # Convert to PDF
     try:
         with open(modified_file_path, 'rb') as f:
             response = requests.post(url=resourceURL, files={'file': f})
             response.raise_for_status()  # Check for errors in the response
-    except Exception as e:
-        return JSONResponse({'status': 'error', 'message': str(e)}, status_code=500)
+    except requests.exceptions.RequestException as e:
+        return JSONResponse({'status': 'error', 'message': f"PDF conversion failed: {str(e)}"}, status_code=500)
+
+    # Ensure the response contains the PDF content
+    if not response.content:
+        return JSONResponse({'status': 'error', 'message': 'PDF conversion returned empty content'}, status_code=500)
 
     # Save the PDF
-    async with aiofiles.open(pdf_file_path, 'wb') as out_file:
-        await out_file.write(response.content)
+    try:
+        async with aiofiles.open(pdf_file_path, 'wb') as out_file:
+            await out_file.write(response.content)
+        logger.info(f"PDF saved at: {pdf_file_path}")
+    except Exception as e:
+        return JSONResponse({'status': 'error', 'message': f"Error saving PDF: {str(e)}"}, status_code=500)
 
     # Read the PDF file and encode to Base64
-    async with aiofiles.open(pdf_file_path, 'rb') as out_file:
-        pdf_content = await out_file.read()
-        pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+    try:
+        async with aiofiles.open(pdf_file_path, 'rb') as out_file:
+            pdf_content = await out_file.read()
+            pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+    except Exception as e:
+        return JSONResponse({'status': 'error', 'message': f"Error reading PDF: {str(e)}"}, status_code=500)
 
     return JSONResponse({'status': 'success', 'pdf_base64': pdf_base64})
+
