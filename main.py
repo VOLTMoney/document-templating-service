@@ -91,8 +91,12 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
         return JSONResponse({'status': 'error', 'message': 'fileName and data are required'}, status_code=400)
 
     # Ensure the temp directory exists
-    if not os.path.exists('temp'):
-        os.makedirs('temp')
+    temp_dir = 'temp'
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+        print(f"Created temp directory: {temp_dir}")
+    else:
+        print(f"Temp directory already exists: {temp_dir}")
 
     resourceURL = f"{get_env('GOTENBERG_API_URL')}/forms/libreoffice/convert"
     file_name = data['fileName'].replace('.docx', '')  # Remove the extension for filename purposes
