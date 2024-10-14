@@ -13,6 +13,8 @@ RUN pip install --no-warn-script-location \
 
 COPY . /code
 
+RUN chmod -R 777 /code
+
 CMD ["venv/bin/uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4532"]
 
 # If running behind a proxy like Nginx or Traefik add --proxy-headers
