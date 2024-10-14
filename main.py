@@ -98,6 +98,10 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
     else:
         print(f"Temp directory already exists: {temp_dir}")
 
+    # List the contents of the temp directory
+    files_in_temp = os.listdir(temp_dir)
+    print(f"Current contents of the temp directory: {files_in_temp}")
+
     resourceURL = f"{get_env('GOTENBERG_API_URL')}/forms/libreoffice/convert"
     file_name = data['fileName'].replace('.docx', '')  # Remove the extension for filename purposes
     file_path = f'temp/{data["fileName"]}'
