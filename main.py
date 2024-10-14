@@ -8,6 +8,7 @@ import aiofiles
 from utils import remove_temporary_files, get_env
 import requests
 import uuid
+import io
 import os
 import logging
 
@@ -83,16 +84,6 @@ async def process_document_template(file: UploadFile = File(...)):
     return {"message": "File uploaded successfully", "file_path": file_location}
 
 
-
-import os
-import uuid
-from fastapi import Body
-from fastapi.responses import JSONResponse
-import requests
-import aiofiles
-from docxtpl import DocxTemplate
-import base64
-
 @app.post('/api/v1/process-template-document/docx-to-pdf')
 async def process_document_template(data: Dict[str, Any] = Body(...)):
     logger.info("Received request to process document template data {}".format(data))
@@ -110,7 +101,6 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
     # Generate unique filenames
     unique_id = str(uuid.uuid4())
     modified_file_path = f'temp/modified_{file_name}_{unique_id}.docx'
-    pdf_file_path = f'temp/{file_name}_{unique_id}.pdf'
 
     # Load and modify the document
     try:
@@ -133,21 +123,12 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
     if not response.content:
         return JSONResponse({'status': 'error', 'message': 'PDF conversion returned empty content'}, status_code=500)
 
-    # Save the PDF
+    # Directly encode PDF content to Base64 without saving it
     try:
-        async with aiofiles.open(pdf_file_path, 'wb') as out_file:
-            await out_file.write(response.content)
-        logger.info(f"PDF saved at: {pdf_file_path}")
+        pdf_base64 = base64.b64encode(response.content).decode('utf-8')
     except Exception as e:
-        return JSONResponse({'status': 'error', 'message': f"Error saving PDF: {str(e)}"}, status_code=500)
-
-    # Read the PDF file and encode to Base64
-    try:
-        async with aiofiles.open(pdf_file_path, 'rb') as out_file:
-            pdf_content = await out_file.read()
-            pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
-    except Exception as e:
-        return JSONResponse({'status': 'error', 'message': f"Error reading PDF: {str(e)}"}, status_code=500)
+        return JSONResponse({'status': 'error', 'message': f"Error encoding PDF to Base64: {str(e)}"}, status_code=500)
 
     return JSONResponse({'status': 'success', 'pdf_base64': pdf_base64})
+
 
