@@ -2,7 +2,9 @@ import base64
 from fastapi import Body, FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import Json
-from docxtpl import DocxTemplate
+from docxtpl import DocxTemplate, InlineImage
+from docx.shared import Inches
+from io import BytesIO
 from typing import Any, Dict
 import aiofiles
 from utils import remove_temporary_files, get_env
@@ -113,7 +115,26 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
     # Load and modify the document
     try:
         document = DocxTemplate(file_path)
-        document.render(data['data'])
+        # Start with the provided data as the context
+        context = data['data']
+        # Process image if provided in nested 'image' data
+        if 'image' in data:
+            image_info = data['image']
+            base64_image = image_info.get('content')
+            image_width = image_info.get('width', 2)  # Default to 2 inches if not provided
+            image_height = image_info.get('height', 2)  # Default to 2 inches if not provided
+
+            if base64_image:
+                # Decode the base64 string and use BytesIO to create a file-like object
+                image_data = base64.b64decode(base64_image)
+                image_file = BytesIO(image_data)
+
+                # Add the InlineImage to the context under a key that matches the placeholder in the template
+                context["image_placeholder"] = InlineImage(document, image_file, width=Inches(image_width), height=Inches(image_height))
+
+        # Render the document once with the combined context
+        document.render(context)
+
         document.save(modified_file_path)
         logger.info(f"Modified docx saved at: {modified_file_path}")
     except Exception as e:
