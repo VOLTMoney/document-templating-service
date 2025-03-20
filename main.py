@@ -88,7 +88,6 @@ async def process_document_template(file: UploadFile = File(...)):
 
 @app.post('/api/v1/process-template-document/docx-to-pdf')
 async def process_document_template(data: Dict[str, Any] = Body(...)):
-    logger.info("Received request to process document template data {}".format(data))
     if not data or 'fileName' not in data or 'data' not in data:
         return JSONResponse({'status': 'error', 'message': 'fileName and data are required'}, status_code=400)
 
@@ -97,8 +96,6 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
         print(f"Created temp directory: {temp_dir}")
-    else:
-        print(f"Temp directory already exists: {temp_dir}")
 
     # List the contents of the temp directory
     files_in_temp = os.listdir(temp_dir)
@@ -111,6 +108,8 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
     # Generate unique filenames
     unique_id = str(uuid.uuid4())
     modified_file_path = f'temp/modified_{file_name}_{unique_id}.docx'
+
+    output_stream = BytesIO()
 
     # Load and modify the document
     try:
@@ -135,16 +134,19 @@ async def process_document_template(data: Dict[str, Any] = Body(...)):
         # Render the document once with the combined context
         document.render(context)
 
-        document.save(modified_file_path)
-        logger.info(f"Modified docx saved at: {modified_file_path}")
+        document.save(output_stream)
+        output_stream.seek(0)  # Reset stream position for reading
     except Exception as e:
         return JSONResponse({'status': 'error', 'message': f"Error rendering or saving docx: {str(e)}"}, status_code=500)
 
     # Convert to PDF
     try:
-        with open(modified_file_path, 'rb') as f:
-            response = requests.post(url=resourceURL, files={'file': f})
-            response.raise_for_status()  # Check for errors in the response
+        response = requests.post(
+            url=resourceURL,
+            files={'file': (
+            'modified.docx', output_stream, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')}
+        )
+        response.raise_for_status()  # Check for errors in the response
     except requests.exceptions.RequestException as e:
         return JSONResponse({'status': 'error', 'message': f"PDF conversion failed: {str(e)}"}, status_code=500)
 
