@@ -98,7 +98,7 @@ async def process_parallel_sections(data: Dict[str, Any]):
     resourceURL = f"{get_env('GOTENBERG_API_URL')}/forms/libreoffice/convert"
     folder_name = data['folderName']
     folder_path = f'{sections_dir}/{folder_name}'
-
+    
     if not os.path.exists(folder_path):
         return JSONResponse({'status': 'error', 'message': f'Section folder not found: {folder_name}'}, status_code=404)
 
@@ -166,17 +166,20 @@ async def process_parallel_sections(data: Dict[str, Any]):
                 document = DocxTemplate(file_path)
                 context = data['data']
 
-                # Process image if provided (for all dynamic sections)
-                if 'image' in data:
+                # Process image if provided (only for first dynamic section)
+                if index == 0 and 'image' in data:
                     image_info = data['image']
                     base64_image = image_info.get('content')
                     image_width = image_info.get('width', 2)
                     image_height = image_info.get('height', 2)
 
                     if base64_image:
-                        image_data = base64.b64decode(base64_image)
-                        image_file = BytesIO(image_data)
-                        context["image_placeholder"] = InlineImage(document, image_file, width=Inches(image_width), height=Inches(image_height))
+                        try:
+                            image_data = base64.b64decode(base64_image)
+                            image_file = BytesIO(image_data)
+                            context["image_placeholder"] = InlineImage(document, image_file, width=Inches(image_width), height=Inches(image_height))
+                        except Exception as e:
+                            pass
 
                 # Render with data
                 document.render(context)
