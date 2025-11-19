@@ -4,3 +4,4 @@ venv
 .env
 .vscode
 .DS_Store
+mandate_env/
